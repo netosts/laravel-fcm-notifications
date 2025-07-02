@@ -6,7 +6,7 @@
  * Service provider for registering FCM notification services and channels.
  * 
  * @package LaravelFcmNotifications
- * @author [Your Name]
+ * @author Neto Santos <netostt91@gmail.com>
  * @license MIT
  * @version 1.0.0
  */

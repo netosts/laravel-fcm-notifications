@@ -7,7 +7,7 @@
  * Supports both notification_tokens table and direct user fcm_token columns.
  * 
  * @package LaravelFcmNotifications
- * @author [Your Name]
+ * @author Neto Santos <netostt91@gmail.com>
  * @license MIT
  * @version 1.0.0
  */

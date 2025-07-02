@@ -7,7 +7,7 @@
  * Provides a clean interface for sending FCM notifications with various modes.
  * 
  * @package LaravelFcmNotifications
- * @author [Your Name]
+ * @author Neto Santos <netostt91@gmail.com>
  * @license MIT
  * @version 1.0.0
  */
@@ -16,7 +16,6 @@ namespace LaravelFcmNotifications\Notifications;
 
 use LaravelFcmNotifications\Services\FcmMessage;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /**
@@ -28,7 +27,7 @@ use Illuminate\Notifications\Notification;
  * - Queue support for async processing
  * - Automatic data type conversion for FCM compatibility
  */
-class FcmNotification extends Notification implements ShouldQueue
+class FcmNotification extends Notification
 {
   use Queueable;
 

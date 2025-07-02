@@ -7,7 +7,7 @@
  * Handles FCM authentication, message sending, error handling, and token cleanup.
  * 
  * @package LaravelFcmNotifications
- * @author [Your Name]
+ * @author Neto Santos <netostt91@gmail.com>
  * @license MIT
  * @version 1.0.0
  */

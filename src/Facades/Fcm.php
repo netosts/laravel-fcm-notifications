@@ -6,7 +6,7 @@
  * A convenient facade for accessing Firebase Cloud Messaging functionality.
  * 
  * @package LaravelFcmNotifications
- * @author [Your Name]
+ * @author Neto Santos <netostt91@gmail.com>
  * @license MIT
  * @version 1.0.0
  */

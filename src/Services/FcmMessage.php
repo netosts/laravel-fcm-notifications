@@ -7,7 +7,7 @@
  * Supports all FCM message types and platform-specific configurations.
  * 
  * @package LaravelFcmNotifications
- * @author [Your Name]
+ * @author Neto Santos <netostt91@gmail.com>
  * @license MIT
  * @version 1.0.0
  */

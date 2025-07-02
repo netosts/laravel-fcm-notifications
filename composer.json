@@ -1,7 +1,6 @@
 {
     "name": "netosts/laravel-fcm-notifications",
     "description": "A robust and secure Firebase Cloud Messaging (FCM) notification system for Laravel applications",
-    "version": "0.1.0",
     "keywords": [
         "laravel",
         "firebase",

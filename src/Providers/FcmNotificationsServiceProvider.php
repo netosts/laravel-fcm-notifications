@@ -13,6 +13,8 @@
 
 namespace LaravelFcmNotifications\Providers;
 
+use LaravelFcmNotifications\Contracts\FcmServiceInterface;
+use LaravelFcmNotifications\Contracts\FcmChannelInterface;
 use LaravelFcmNotifications\Services\FcmChannel;
 use LaravelFcmNotifications\Services\FcmService;
 use LaravelFcmNotifications\Console\Commands\TestFcmCommand;
@@ -32,19 +34,30 @@ class FcmNotificationsServiceProvider extends ServiceProvider
    */
   public function register(): void
   {
-    // Register the main FCM service
-    $this->app->singleton('fcm-notifications.service', function ($app) {
-      return new FcmService();
-    });
-
-    // Register alias for easier access
-    $this->app->alias('fcm-notifications.service', FcmService::class);
-
     // Merge configuration from package
     $this->mergeConfigFrom(
       __DIR__ . '/../../config/fcm-notifications.php',
       'fcm-notifications'
     );
+
+    // Register the main FCM service interface
+    $this->app->singleton(FcmServiceInterface::class, function ($app) {
+      return new FcmService();
+    });
+
+    // Register the main FCM service for backward compatibility
+    $this->app->singleton('fcm-notifications.service', function ($app) {
+      return $app->make(FcmServiceInterface::class);
+    });
+
+    // Register alias for easier access
+    $this->app->alias('fcm-notifications.service', FcmService::class);
+    $this->app->alias(FcmServiceInterface::class, 'fcm-notifications.service');
+
+    // Register the FCM channel interface
+    $this->app->singleton(FcmChannelInterface::class, function ($app) {
+      return new FcmChannel($app->make(FcmServiceInterface::class));
+    });
   }
 
   /**
@@ -54,7 +67,7 @@ class FcmNotificationsServiceProvider extends ServiceProvider
   {
     // Register the FCM notification channel
     $this->app->make(ChannelManager::class)->extend('fcm', function ($app) {
-      return new FcmChannel($app->make('fcm-notifications.service'));
+      return $app->make(FcmChannelInterface::class);
     });
 
     // Register console commands

@@ -14,7 +14,10 @@
 
 namespace LaravelFcmNotifications\Services;
 
+use LaravelFcmNotifications\Contracts\FcmChannelInterface;
+use LaravelFcmNotifications\Contracts\FcmServiceInterface;
 use LaravelFcmNotifications\Notifications\FcmNotification;
+use LaravelFcmNotifications\Services\FcmMessage;
 
 /**
  * FCM Notification Channel
@@ -25,16 +28,16 @@ use LaravelFcmNotifications\Notifications\FcmNotification;
  * - Automatic cleanup of invalid tokens
  * - Flexible token source detection
  */
-class FcmChannel
+class FcmChannel implements FcmChannelInterface
 {
-  protected FcmService $fcmService;
+  protected FcmServiceInterface $fcmService;
 
   /**
    * Create a new FCM channel instance
    * 
-   * @param FcmService $fcmService FCM service instance
+   * @param FcmServiceInterface $fcmService FCM service instance
    */
-  public function __construct(FcmService $fcmService)
+  public function __construct(FcmServiceInterface $fcmService)
   {
     $this->fcmService = $fcmService;
   }

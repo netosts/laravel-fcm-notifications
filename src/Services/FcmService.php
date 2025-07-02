@@ -14,6 +14,7 @@
 
 namespace LaravelFcmNotifications\Services;
 
+use LaravelFcmNotifications\Contracts\FcmServiceInterface;
 use LaravelFcmNotifications\Events\UnregisteredFcmTokenDetected;
 use Exception;
 use Illuminate\Support\Facades\Cache;
@@ -30,7 +31,7 @@ use Illuminate\Support\Facades\Log;
  * - Comprehensive error handling and logging
  * - Support for all FCM message types
  */
-class FcmService
+class FcmService implements FcmServiceInterface
 {
   protected string $projectId;
   protected string $clientEmail;

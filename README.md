@@ -87,37 +87,73 @@ Schema::table('users', function (Blueprint $table) {
 
 ### Basic Usage
 
-Create a notification class:
+To send a notification, you can directly use the `FcmNotification` class or create a custom notification class.
+
+**Option 1: Use the FcmNotification Class Directly**
+
+```php
+use LaravelFcmNotifications\Notifications\FcmNotification;
+
+$notification = new FcmNotification(
+    title: 'New Message',
+    body: 'You have a new message',
+    image: 'https://example.com/image.jpg',
+    data: ['message_id' => '123']
+);
+```
+
+**Option 2: Create a Custom Notification Class**
+
+```bash
+php artisan make:notification PushNotification
+```
+
+You shall extend the `FcmNotification` class and optionally implement the `ShouldQueue` interface for asynchronous processing and the `Queueable` trait:
 
 ```php
 <?php
 
 namespace App\Notifications;
 
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use LaravelFcmNotifications\Notifications\FcmNotification;
 
-class WelcomeNotification extends FcmNotification
+class PushNotification extends FcmNotification implements ShouldQueue
 {
-    public function __construct(private string $username)
-    {
-        parent::__construct(
-            title: 'Welcome!',
-            body: "Hello {$this->username}, welcome to our app!",
-            data: [
-                'type' => 'welcome',
-                'user_id' => '123'
-            ]
-        );
-    }
+  use Queueable;
+
+  // You can define additional properties or methods here if needed
 }
+
 ```
 
-Send the notification:
+#### Send the notification:
 
 ```php
-use App\Notifications\WelcomeNotification;
+// Option 1: Directly using the FcmNotification class
+use LaravelFcmNotifications\Notifications\FcmNotification;
 
-$user->notify(new WelcomeNotification($user->name));
+$notification = new FcmNotification(
+    title: 'New Message',
+    body: 'You have a new message',
+    image: 'https://example.com/image.jpg',
+    data: ['message_id' => '123']
+);
+
+$user->notify($notification);
+
+// Option 2: Using the custom notification class
+use App\Notifications\PushNotification;
+
+$notification = new PushNotification(
+    title: 'New Message',
+    body: 'You have a new message',
+    image: 'https://example.com/image.jpg',
+    data: ['message_id' => '123']
+);
+
+$user->notify($notification);
 ```
 
 ### Direct Service Usage

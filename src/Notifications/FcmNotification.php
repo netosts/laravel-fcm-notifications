@@ -15,7 +15,6 @@
 namespace LaravelFcmNotifications\Notifications;
 
 use LaravelFcmNotifications\Services\FcmMessage;
-use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
 /**
@@ -29,8 +28,6 @@ use Illuminate\Notifications\Notification;
  */
 class FcmNotification extends Notification
 {
-  use Queueable;
-
   protected ?string $token;
   protected string $title;
   protected string $body;

@@ -68,7 +68,7 @@ return [
     |
     */
 
-  'default_mode' => env('FCM_DEFAULT_MODE', 'data_only'),
+  'default_mode' => env('FCM_DEFAULT_MODE', 'notification_and_data'),
 
   /*
     |--------------------------------------------------------------------------

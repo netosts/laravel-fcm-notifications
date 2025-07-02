@@ -55,6 +55,7 @@ Add the following to your `.env` file:
 FCM_PROJECT_ID=your-firebase-project-id
 FCM_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
 FCM_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour-Private-Key-Here\n-----END PRIVATE KEY-----"
+FCM_TIMEOUT=30
 FCM_DEFAULT_MODE=data_only
 FCM_TOKEN_COLUMN=token
 FCM_AUTO_CLEANUP_TOKENS=true

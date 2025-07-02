@@ -1,8 +1,8 @@
 # Laravel FCM Notifications
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/netosts/laravel-fcm-notifications.svg?style=flat-square)](https://packagist.org/packages/netosts/laravel-fcm-notifications)
-[![Total Downloads](https://img.shields.io/packagist/dt/netosts/laravel-fcm-notifications.svg?style=flat-square)](https://packagist.org/packages/netosts/laravel-fcm-notifications)
-[![License](https://img.shields.io/packagist/l/netosts/laravel-fcm-notifications.svg?style=flat-square)](https://packagist.org/packages/netosts/laravel-fcm-notifications)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/netosts/laravel-fcm-notifications?style=flat-square)](https://packagist.org/packages/netosts/laravel-fcm-notifications)
+[![Total Downloads](https://img.shields.io/packagist/dt/netosts/laravel-fcm-notifications?style=flat-square)](https://packagist.org/packages/netosts/laravel-fcm-notifications)
+[![License](https://img.shields.io/packagist/l/netosts/laravel-fcm-notifications?style=flat-square)](https://packagist.org/packages/netosts/laravel-fcm-notifications)
 
 A robust and secure Firebase Cloud Messaging (FCM) notification system for Laravel applications. This package provides a comprehensive solution for sending push notifications with automatic token management, cleanup, and support for all FCM message types.
 

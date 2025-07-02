@@ -8,21 +8,21 @@ A robust and secure Firebase Cloud Messaging (FCM) notification system for Larav
 
 ## Features
 
--   🚀 **Easy Integration** - Drop-in Laravel notification channel
--   🔐 **Secure Authentication** - JWT-based Google OAuth2 authentication
--   📱 **Multiple Message Types** - Support for notification-only, data-only, and combined messages
--   🔄 **Automatic Token Cleanup** - Removes invalid tokens automatically
--   📊 **Batch Sending** - Send to multiple devices efficiently
--   🛠️ **Platform Specific** - Android and iOS specific configurations
--   📝 **Comprehensive Logging** - Detailed logging for debugging
--   ⚡ **Performance Optimized** - Token caching and efficient API calls
--   🧪 **Testing Commands** - Built-in commands for testing functionality
+- 🚀 **Easy Integration** - Drop-in Laravel notification channel
+- 🔐 **Secure Authentication** - JWT-based Google OAuth2 authentication
+- 📱 **Multiple Message Types** - Support for notification-only, data-only, and combined messages
+- 🔄 **Automatic Token Cleanup** - Removes invalid tokens automatically
+- 📊 **Batch Sending** - Send to multiple devices efficiently
+- 🛠️ **Platform Specific** - Android and iOS specific configurations
+- 📝 **Comprehensive Logging** - Detailed logging for debugging
+- ⚡ **Performance Optimized** - Token caching and efficient API calls
+- 🧪 **Testing Commands** - Built-in commands for testing functionality
 
 ## Requirements
 
--   PHP 8.1 or higher
--   Laravel 10.0 or higher
--   Firebase project with FCM enabled
+- PHP 8.1 or higher
+- Laravel 10.0 or higher
+- Firebase project with FCM enabled
 
 ## Installation
 
@@ -62,7 +62,7 @@ FCM_AUTO_CLEANUP_TOKENS=true
 
 **Note:** The private key should include the `\n` characters for line breaks.
 
-### 3. Database Setup (Optional)
+### 3. Database Setup
 
 If you want to store multiple FCM tokens per user, create a `notification_tokens` table:
 
@@ -81,6 +81,38 @@ Or add a single token column to your users table:
 Schema::table('users', function (Blueprint $table) {
     $table->string('fcm_token')->nullable();
 });
+```
+
+### 4. Token Management
+
+The package automatically discovers FCM tokens from your models. Implement one of these methods:
+
+#### Option 1: Relationship Method (If you created `notification_tokens` table)
+
+```php
+class User extends Model
+{
+    public function notificationTokens()
+    {
+        return $this->hasMany(NotificationToken::class);
+    }
+}
+```
+
+#### Option 2: Single Token Methods (If you added `fcm_token` column)
+
+```php
+class User extends Model
+{
+    // Method 1: Attribute
+    protected $fillable = ['fcm_token'];
+
+    // Method 2: Custom method
+    public function getFcmToken()
+    {
+        return $this->fcm_token;
+    }
+}
 ```
 
 ## Usage
@@ -253,38 +285,6 @@ $message = FcmMessage::create('iOS Message', 'Optimized for iOS')
     ->setIosSound('custom_sound.caf');
 ```
 
-### Token Management
-
-The package automatically discovers FCM tokens from your models. Implement one of these methods:
-
-#### Option 1: Relationship Method (Multiple Tokens)
-
-```php
-class User extends Model
-{
-    public function notificationTokens()
-    {
-        return $this->hasMany(NotificationToken::class);
-    }
-}
-```
-
-#### Option 2: Single Token Methods
-
-```php
-class User extends Model
-{
-    // Method 1: Attribute
-    protected $fillable = ['fcm_token'];
-
-    // Method 2: Custom method
-    public function getFcmToken()
-    {
-        return $this->fcm_token;
-    }
-}
-```
-
 ### Event Listeners
 
 The package dispatches events for automatic token cleanup:
@@ -362,18 +362,18 @@ return [
 
 1. **Authentication Failed**
 
-    - Verify your Firebase service account credentials
-    - Ensure the private key includes proper line breaks (`\n`)
+   - Verify your Firebase service account credentials
+   - Ensure the private key includes proper line breaks (`\n`)
 
 2. **Tokens Not Found**
 
-    - Check your token storage implementation
-    - Verify the `token_column` configuration
+   - Check your token storage implementation
+   - Verify the `token_column` configuration
 
 3. **Messages Not Received**
-    - Test with the `fcm:test` command
-    - Check FCM token validity
-    - Verify app is properly configured for FCM
+   - Test with the `fcm:test` command
+   - Check FCM token validity
+   - Verify app is properly configured for FCM
 
 ### Debug Mode
 
@@ -397,8 +397,8 @@ If you discover any security-related issues, please email netostt91@gmail.com in
 
 ## Credits
 
--   [Neto Santos](https://github.com/netosts)
--   [All Contributors](../../contributors)
+- [Neto Santos](https://github.com/netosts)
+- [All Contributors](../../contributors)
 
 ## License
 
@@ -406,6 +406,6 @@ The MIT License (MIT). Please see [License File](LICENSE) for more information.
 
 ## Support
 
--   📧 Email: netostt91@gmail.com
--   🐛 Issues: [GitHub Issues](https://github.com/netosts/laravel-fcm-notifications/issues)
--   💬 Discussions: [GitHub Discussions](https://github.com/netosts/laravel-fcm-notifications/discussions)
+- 📧 Email: netostt91@gmail.com
+- 🐛 Issues: [GitHub Issues](https://github.com/netosts/laravel-fcm-notifications/issues)
+- 💬 Discussions: [GitHub Discussions](https://github.com/netosts/laravel-fcm-notifications/discussions)

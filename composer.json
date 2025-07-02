@@ -1,0 +1,51 @@
+{
+    "name": "netosts/laravel-fcm-notifications",
+    "description": "A robust and secure Firebase Cloud Messaging (FCM) notification system for Laravel applications",
+    "version": "1.0.0",
+    "keywords": [
+        "laravel",
+        "firebase",
+        "fcm",
+        "push-notifications",
+        "notifications",
+        "messaging",
+        "mobile"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "netosts",
+            "email": "netostt91@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10.0|^11.0",
+        "illuminate/notifications": "^10.0|^11.0",
+        "illuminate/http": "^10.0|^11.0",
+        "illuminate/console": "^10.0|^11.0",
+        "illuminate/cache": "^10.0|^11.0",
+        "illuminate/log": "^10.0|^11.0",
+        "illuminate/events": "^10.0|^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "LaravelFcmNotifications\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "LaravelFcmNotifications\\Providers\\FcmNotificationsServiceProvider"
+            ],
+            "aliases": {
+                "Fcm": "LaravelFcmNotifications\\Facades\\Fcm"
+            }
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

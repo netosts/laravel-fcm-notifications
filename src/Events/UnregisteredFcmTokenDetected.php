@@ -9,7 +9,6 @@
  * @package LaravelFcmNotifications
  * @author Neto Santos <netostt91@gmail.com>
  * @license MIT
- * @version 1.0.0
  */
 
 namespace LaravelFcmNotifications\Events;

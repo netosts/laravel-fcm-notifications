@@ -6,6 +6,28 @@
 
 A robust and secure Firebase Cloud Messaging (FCM) notification system for Laravel applications. This package provides a comprehensive solution for sending push notifications with automatic token management, cleanup, and support for all FCM message types.
 
+## Table of Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+  - [Firebase Setup](#1-firebase-setup)
+  - [Environment Variables](#2-environment-variables)
+  - [Database Setup](#3-database-setup)
+  - [Token Management](#4-token-management)
+- [Usage](#usage)
+  - [Basic Usage](#basic-usage)
+  - [Direct Service Usage](#direct-service-usage)
+  - [Message Types](#message-types)
+  - [Batch Sending](#batch-sending)
+  - [Platform-Specific Configuration](#platform-specific-configuration)
+- [Testing](#testing)
+- [Configuration Options](#configuration-options)
+- [Troubleshooting](#troubleshooting)
+- [Support](#support)
+
 ## Features
 
 - 🚀 **Easy Integration** - Drop-in Laravel notification channel
@@ -26,7 +48,7 @@ A robust and secure Firebase Cloud Messaging (FCM) notification system for Larav
 
 ## Installation
 
-Install the package via Composer:
+You can install the package via Composer:
 
 ```bash
 composer require netosts/laravel-fcm-notifications
@@ -38,47 +60,109 @@ Publish the configuration file:
 php artisan vendor:publish --tag=fcm-notifications-config
 ```
 
-## Configuration
+## Quick Start
 
-### 1. Firebase Setup
+Get up and running in minutes:
 
-1. Go to the [Firebase Console](https://console.firebase.google.com/)
-2. Create a new project or select an existing one
-3. Go to **Project Settings** → **Service Accounts**
-4. Click **Generate New Private Key** to download the service account JSON file
+### 1. Set up your Firebase credentials
 
-### 2. Environment Variables
-
-Add the following to your `.env` file:
+Add these environment variables to your `.env` file:
 
 ```env
 FCM_PROJECT_ID=your-firebase-project-id
 FCM_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
 FCM_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour-Private-Key-Here\n-----END PRIVATE KEY-----"
+```
+
+### 2. Add FCM token to your User model
+
+```php
+// Add to your users table migration
+Schema::table('users', function (Blueprint $table) {
+    $table->string('fcm_token')->nullable();
+});
+
+// Make it fillable in your User model
+class User extends Model
+{
+    protected $fillable = ['fcm_token'];
+}
+```
+
+### 3. Send your first notification
+
+```php
+use LaravelFcmNotifications\Notifications\FcmNotification;
+
+$notification = new FcmNotification(
+    title: 'Welcome!',
+    body: 'Thanks for joining our app'
+);
+
+$user->notify($notification);
+```
+
+That's it! Your notification will be sent to the user's device.
+
+## Configuration
+
+> **💡 Tip:** If you just want to get started quickly, check the [Quick Start](#quick-start) section above.
+
+### 1. Firebase Setup
+
+To use FCM, you need a Firebase project with proper credentials:
+
+1. Go to the [Firebase Console](https://console.firebase.google.com/)
+2. Create a new project or select an existing one
+3. Navigate to **Project Settings** → **Service Accounts**
+4. Click **Generate New Private Key** to download the service account JSON file
+
+### 2. Environment Variables
+
+Add the following variables to your `.env` file:
+
+```env
+# Required - Firebase Credentials
+FCM_PROJECT_ID=your-firebase-project-id
+FCM_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+FCM_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour-Private-Key-Here\n-----END PRIVATE KEY-----"
+
+# Optional - API Settings
 FCM_TIMEOUT=30
 FCM_DEFAULT_MODE=data_only
+
+# Optional - Token Management
 FCM_TOKEN_COLUMN=token
 FCM_AUTO_CLEANUP_TOKENS=true
 ```
 
-**Note:** The private key should include the `\n` characters for line breaks.
+> **⚠️ Important:** The private key must include `\n` characters for line breaks.
 
 ### 3. Database Setup
 
-If you want to store multiple FCM tokens per user, create a `notification_tokens` table:
+Choose one of the following approaches for storing FCM tokens:
+
+#### Option A: Multiple Tokens per User (Recommended)
+
+For users with multiple devices, create a dedicated tokens table:
 
 ```php
+// Create migration: php artisan make:migration create_notification_tokens_table
 Schema::create('notification_tokens', function (Blueprint $table) {
     $table->id();
     $table->foreignId('user_id')->constrained()->onDelete('cascade');
     $table->string('token')->unique();
+    $table->string('device_type')->nullable(); // 'android', 'ios', 'web'
     $table->timestamps();
 });
 ```
 
-Or add a single token column to your users table:
+#### Option B: Single Token per User
+
+Add a token column to your existing users table:
 
 ```php
+// Add to your users table migration
 Schema::table('users', function (Blueprint $table) {
     $table->string('fcm_token')->nullable();
 });
@@ -86,9 +170,9 @@ Schema::table('users', function (Blueprint $table) {
 
 ### 4. Token Management
 
-The package automatically discovers FCM tokens from your models. Implement one of these methods:
+Configure how the package discovers FCM tokens from your models:
 
-#### Option 1: Relationship Method (If you created `notification_tokens` table)
+#### For Multiple Tokens (Option A)
 
 ```php
 class User extends Model
@@ -98,17 +182,27 @@ class User extends Model
         return $this->hasMany(NotificationToken::class);
     }
 }
+
+// Optional: Create a NotificationToken model
+class NotificationToken extends Model
+{
+    protected $fillable = ['user_id', 'token', 'device_type'];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+}
 ```
 
-#### Option 2: Single Token Methods (If you added `fcm_token` column)
+#### For Single Token (Option B)
 
 ```php
 class User extends Model
 {
-    // Method 1: Attribute
     protected $fillable = ['fcm_token'];
 
-    // Method 2: Custom method
+    // Optional: Custom method name
     public function getFcmToken()
     {
         return $this->fcm_token;
@@ -120,28 +214,31 @@ class User extends Model
 
 ### Basic Usage
 
-To send a notification, you can directly use the `FcmNotification` class or create a custom notification class.
+There are two main ways to send FCM notifications:
 
-**Option 1: Use the FcmNotification Class Directly**
+#### Method 1: Using FcmNotification Directly (Simple)
 
 ```php
 use LaravelFcmNotifications\Notifications\FcmNotification;
 
+// Simple notification
 $notification = new FcmNotification(
     title: 'New Message',
-    body: 'You have a new message',
-    image: 'https://example.com/image.jpg',
-    data: ['message_id' => '123']
+    body: 'You have a new message from John'
 );
+
+$user->notify($notification);
 ```
 
-**Option 2: Create a Custom Notification Class**
+#### Method 2: Custom Notification Class (Recommended)
+
+Create a custom notification class for better organization:
 
 ```bash
 php artisan make:notification PushNotification
 ```
 
-You shall extend the `FcmNotification` class and optionally implement the `ShouldQueue` interface for asynchronous processing and the `Queueable` trait:
+Extend the `FcmNotification` class:
 
 ```php
 <?php
@@ -154,36 +251,22 @@ use LaravelFcmNotifications\Notifications\FcmNotification;
 
 class PushNotification extends FcmNotification implements ShouldQueue
 {
-  use Queueable;
+    use Queueable;
 
-  // You can define additional properties or methods here if needed
+    // Add custom logic here if needed
 }
-
 ```
 
-#### Send the notification:
+Use your custom notification:
 
 ```php
-// Option 1: Directly using the FcmNotification class
-use LaravelFcmNotifications\Notifications\FcmNotification;
-
-$notification = new FcmNotification(
-    title: 'New Message',
-    body: 'You have a new message',
-    image: 'https://example.com/image.jpg',
-    data: ['message_id' => '123']
-);
-
-$user->notify($notification);
-
-// Option 2: Using the custom notification class
 use App\Notifications\PushNotification;
 
 $notification = new PushNotification(
     title: 'New Message',
-    body: 'You have a new message',
-    image: 'https://example.com/image.jpg',
-    data: ['message_id' => '123']
+    body: 'You have a new message from John',
+    image: 'https://example.com/avatar.jpg',
+    data: ['message_id' => '123', 'sender_id' => '456']
 );
 
 $user->notify($notification);
@@ -191,23 +274,26 @@ $user->notify($notification);
 
 ### Direct Service Usage
 
-You can also use the FCM service directly:
+For more control, use the FCM service directly:
 
 ```php
 use LaravelFcmNotifications\Facades\Fcm;
 use LaravelFcmNotifications\Services\FcmMessage;
 
+// Create a detailed message
 $message = FcmMessage::create(
     title: 'Direct Message',
-    body: 'This is sent directly via the service',
-    image: 'https://example.com/image.jpg'
+    body: 'This message was sent directly via the service'
 )
 ->addData('custom_key', 'custom_value')
+->addData('user_action', 'view_profile')
 ->setAndroidPriority('high')
 ->setIosBadge(1);
 
-$result = Fcm::sendToDevice($token, $message);
+// Send to a specific device
+$result = Fcm::sendToDevice($deviceToken, $message);
 
+// Handle the result
 if ($result['success']) {
     echo "Message sent successfully!";
 } else {
@@ -217,81 +303,118 @@ if ($result['success']) {
 
 ### Message Types
 
+FCM supports different message types for different use cases:
+
 #### 1. Notification + Data (Default)
 
-Shows system notification and passes data to your app:
+Shows a system notification and passes custom data to your app:
 
 ```php
 $notification = new FcmNotification(
-    title: 'New Message',
-    body: 'You have a new message',
-    data: ['message_id' => '123']
+    title: 'New Order',
+    body: 'You received a new order #1234',
+    data: ['order_id' => '1234', 'action' => 'view_order']
 );
 ```
 
 #### 2. Data Only
 
-No system notification, your app handles everything:
+Sends data silently to your app without showing a notification:
 
 ```php
 $notification = (new FcmNotification(
-    title: 'Background Update',
-    body: 'Data updated',
-    data: ['sync' => 'true']
+    title: 'Background Sync', // Not shown to user
+    body: 'Data updated',     // Not shown to user
+    data: ['sync' => 'true', 'timestamp' => time()]
 ))->dataOnly();
 ```
 
 #### 3. Notification Only
 
-Only shows system notification, no app data:
+Shows only a system notification without custom data:
 
 ```php
 $notification = (new FcmNotification(
-    title: 'System Alert',
-    body: 'Important system message'
+    title: 'System Maintenance',
+    body: 'Our systems will be down for maintenance tonight'
 ))->notificationOnly();
 ```
 
 ### Batch Sending
 
-Send to multiple devices:
+Send the same message to multiple devices efficiently:
 
 ```php
-$tokens = ['token1', 'token2', 'token3'];
+$deviceTokens = ['token1', 'token2', 'token3'];
 
-$message = FcmMessage::create('Batch Message', 'Sent to multiple devices');
+$message = FcmMessage::create(
+    title: 'System Announcement',
+    body: 'Important update for all users'
+);
 
-$result = Fcm::sendToMultipleDevices($tokens, $message);
+$result = Fcm::sendToMultipleDevices($deviceTokens, $message);
 
-echo "Sent to {$result['summary']['success']} devices";
-echo "Failed: {$result['summary']['failure']} devices";
+// Check results
+echo "Successfully sent to: {$result['summary']['success']} devices\n";
+echo "Failed to send to: {$result['summary']['failure']} devices\n";
+
+// Handle individual failures
+foreach ($result['details'] as $detail) {
+    if (!$detail['success']) {
+        echo "Failed for token: {$detail['token']}, Error: {$detail['error']}\n";
+    }
+}
 ```
 
 ### Platform-Specific Configuration
 
-#### Android
+Customize notifications for different platforms:
+
+#### Android Specific Settings
 
 ```php
-$message = FcmMessage::create('Android Message', 'Optimized for Android')
+$message = FcmMessage::create('Android Notification', 'Optimized for Android devices')
     ->setAndroidChannel('important_notifications')
     ->setAndroidPriority('high')
-    ->setAndroidSound('custom_sound.mp3');
+    ->setAndroidSound('custom_sound.mp3')
+    ->addData('android_specific', 'value');
+
+$user->notify($notification);
 ```
 
-#### iOS
+#### iOS Specific Settings
 
 ```php
-$message = FcmMessage::create('iOS Message', 'Optimized for iOS')
-    ->setIosBadge(5)
-    ->setIosSound('custom_sound.caf');
+$message = FcmMessage::create('iOS Notification', 'Optimized for iOS devices')
+    ->setIosBadge(5)                    // Badge count
+    ->setIosSound('custom_sound.caf')   // Custom sound
+    ->addData('ios_specific', 'value');
+
+$user->notify($notification);
+```
+
+#### Cross-Platform Message
+
+```php
+$message = FcmMessage::create('Universal Message', 'Works on all platforms')
+    // Android settings
+    ->setAndroidPriority('high')
+    ->setAndroidChannel('notifications')
+
+    // iOS settings
+    ->setIosBadge(1)
+    ->setIosSound('default')
+
+    // Common data
+    ->addData('universal_data', 'value');
 ```
 
 ### Event Listeners
 
-The package dispatches events for automatic token cleanup:
+The package automatically handles token cleanup through events:
 
 ```php
-// In EventServiceProvider
+// In your EventServiceProvider
 protected $listen = [
     \LaravelFcmNotifications\Events\UnregisteredFcmTokenDetected::class => [
         \LaravelFcmNotifications\Listeners\CleanupUnregisteredFcmToken::class,
@@ -299,107 +422,217 @@ protected $listen = [
 ];
 ```
 
+When an invalid token is detected, it's automatically removed from your database (if `FCM_AUTO_CLEANUP_TOKENS=true`).
+
 ## Testing
 
-### Test Commands
+### Built-in Test Commands
 
-The package includes testing commands:
+The package includes helpful commands for testing your FCM integration:
 
 ```bash
-# Test basic FCM functionality
-php artisan fcm:test --token=your-test-token
+# Test basic FCM functionality with a real device token
+php artisan fcm:test --token=your-actual-device-token
 
-# Test direct service usage
-php artisan fcm:test --token=your-test-token --direct
+# Test the direct service (bypasses Laravel notifications)
+php artisan fcm:test --token=your-device-token --direct
 
 # Test token cleanup functionality
-php artisan fcm:test-cleanup your-test-token
+php artisan fcm:test-cleanup your-device-token
 ```
 
 ### Token Validation
 
+Validate FCM tokens before sending notifications:
+
 ```php
 use LaravelFcmNotifications\Facades\Fcm;
 
-// Validate single token
-$isValid = Fcm::validateToken($token);
+// Validate a single token
+$isValid = Fcm::validateToken($deviceToken);
 
-// Validate multiple tokens
-$result = Fcm::validateTokens([$token1, $token2, $token3]);
-echo "Valid: " . count($result['valid']);
-echo "Invalid: " . count($result['invalid']);
+if ($isValid) {
+    echo "Token is valid and ready to receive notifications";
+} else {
+    echo "Token is invalid or expired";
+}
+
+// Validate multiple tokens at once
+$tokens = ['token1', 'token2', 'token3'];
+$result = Fcm::validateTokens($tokens);
+
+echo "Valid tokens: " . count($result['valid']) . "\n";
+echo "Invalid tokens: " . count($result['invalid']) . "\n";
+
+// Remove invalid tokens
+foreach ($result['invalid'] as $invalidToken) {
+    // Remove from your database
+    NotificationToken::where('token', $invalidToken)->delete();
+}
+```
+
+### Testing in Development
+
+```php
+// Only send notifications in production
+if (app()->environment('production')) {
+    $user->notify(new PushNotification('Production Alert', 'This is live!'));
+} else {
+    // Log instead of sending during development
+    Log::info('Would send notification: Production Alert');
+}
 ```
 
 ## Configuration Options
 
-The `config/fcm-notifications.php` file contains all configuration options:
+The `config/fcm-notifications.php` file provides comprehensive configuration options:
 
 ```php
 return [
-    // Firebase credentials
+    // Firebase Credentials (Required)
     'project_id' => env('FCM_PROJECT_ID'),
     'client_email' => env('FCM_CLIENT_EMAIL'),
     'private_key' => env('FCM_PRIVATE_KEY'),
 
-    // API settings
-    'timeout' => env('FCM_TIMEOUT', 30),
+    // API Settings
+    'timeout' => env('FCM_TIMEOUT', 30), // Request timeout in seconds
 
-    // Default message behavior
-    'default_mode' => env('FCM_DEFAULT_MODE', 'data_only'),
+    // Message Behavior
+    'default_mode' => env('FCM_DEFAULT_MODE', 'data_only'), // 'notification_only', 'data_only', 'both'
 
-    // Token storage
-    'token_column' => env('FCM_TOKEN_COLUMN', 'token'),
-    'auto_cleanup_tokens' => env('FCM_AUTO_CLEANUP_TOKENS', true),
+    // Token Management
+    'token_column' => env('FCM_TOKEN_COLUMN', 'token'),              // Column name for single token storage
+    'auto_cleanup_tokens' => env('FCM_AUTO_CLEANUP_TOKENS', true),   // Auto-remove invalid tokens
 
-    // JWT settings
-    'cache_token' => true,
-    'cache_prefix' => 'fcm_notifications_token',
+    // Performance Settings
+    'cache_token' => true,                              // Cache JWT tokens
+    'cache_prefix' => 'fcm_notifications_token',        // Cache key prefix
 ];
 ```
+
+### Configuration Details
+
+| Option                | Description                     | Default     |
+| --------------------- | ------------------------------- | ----------- |
+| `project_id`          | Your Firebase project ID        | Required    |
+| `client_email`        | Service account email           | Required    |
+| `private_key`         | Service account private key     | Required    |
+| `timeout`             | HTTP request timeout (seconds)  | 30          |
+| `default_mode`        | Default message type            | `data_only` |
+| `token_column`        | Single token column name        | `token`     |
+| `auto_cleanup_tokens` | Auto-remove invalid tokens      | `true`      |
+| `cache_token`         | Cache JWT authentication tokens | `true`      |
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Authentication Failed**
+#### 🔐 Authentication Failed
 
-   - Verify your Firebase service account credentials
-   - Ensure the private key includes proper line breaks (`\n`)
+**Symptoms:** Authentication errors, 401 responses from FCM
 
-2. **Tokens Not Found**
+**Solutions:**
 
-   - Check your token storage implementation
-   - Verify the `token_column` configuration
+- Verify your Firebase service account credentials in `.env`
+- Ensure the private key includes proper line breaks (`\n`)
+- Check that your service account has FCM permissions
+- Validate your `project_id` matches your Firebase project
 
-3. **Messages Not Received**
-   - Test with the `fcm:test` command
-   - Check FCM token validity
-   - Verify app is properly configured for FCM
+```bash
+# Test your credentials
+php artisan fcm:test --token=test-token
+```
+
+#### 🔍 Tokens Not Found
+
+**Symptoms:** No notifications sent, "no tokens found" errors
+
+**Solutions:**
+
+- Check your token storage implementation
+- Verify the `token_column` configuration matches your database
+- Ensure users have FCM tokens stored
+- Check relationship methods in your User model
+
+```php
+// Debug token discovery
+$user = User::find(1);
+dd($user->notificationTokens); // For multiple tokens
+dd($user->fcm_token);          // For single token
+```
+
+#### 📱 Messages Not Received
+
+**Symptoms:** API calls succeed but notifications don't appear
+
+**Solutions:**
+
+- Test with the built-in test command
+- Check FCM token validity
+- Verify your mobile app is properly configured for FCM
+- Check device notification settings
+- Ensure app is not in battery optimization mode (Android)
+
+```bash
+# Validate your tokens
+php artisan tinker
+>>> Fcm::validateToken('your-device-token')
+```
+
+#### ⚡ Performance Issues
+
+**Symptoms:** Slow notification sending, timeouts
+
+**Solutions:**
+
+- Enable token caching in config
+- Use batch sending for multiple recipients
+- Implement queue processing for large volumes
+- Increase timeout setting if needed
+
+```php
+// Use queued notifications for better performance
+class PushNotification extends FcmNotification implements ShouldQueue
+{
+    use Queueable;
+}
+```
 
 ### Debug Mode
 
-Enable detailed logging by setting your log level to `debug`:
+Enable detailed logging for troubleshooting:
 
 ```env
+# In your .env file
 LOG_LEVEL=debug
+APP_DEBUG=true
 ```
+
+This will log detailed FCM request/response information to help diagnose issues.
+
+### Getting Help
+
+If you're still having issues:
+
+1. **Check the logs** - Look in `storage/logs/laravel.log` for detailed error messages
+2. **Test with the built-in commands** - Use `php artisan fcm:test` to isolate issues
+3. **Validate your setup** - Double-check Firebase credentials and configuration
+4. **Review the FCM documentation** - Some issues may be Firebase-specific
+
+---
 
 ## Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
 
-<!-- ## Contributing
-
-Please see [CONTRIBUTING](CONTRIBUTING.md) for details. -->
-
 ## Security
 
-If you discover any security-related issues, please email netostt91@gmail.com instead of using the issue tracker.
+If you discover any security-related issues, please email **netostt91@gmail.com** instead of using the issue tracker.
 
 ## Credits
 
-- [Neto Santos](https://github.com/netosts)
-- [All Contributors](../../contributors)
+- [Neto Santos](https://github.com/netosts) - Creator and maintainer
+- [All Contributors](../../contributors) - Community contributors
 
 ## License
 
@@ -407,6 +640,17 @@ The MIT License (MIT). Please see [License File](LICENSE) for more information.
 
 ## Support
 
-- 📧 Email: netostt91@gmail.com
-- 🐛 Issues: [GitHub Issues](https://github.com/netosts/laravel-fcm-notifications/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/netosts/laravel-fcm-notifications/discussions)
+Need help? Here's how to get support:
+
+- 📧 **Email:** [netostt91@gmail.com](mailto:netostt91@gmail.com)
+- 🐛 **Bug Reports:** [GitHub Issues](https://github.com/netosts/laravel-fcm-notifications/issues)
+- 💬 **Questions & Discussions:** [GitHub Discussions](https://github.com/netosts/laravel-fcm-notifications/discussions)
+- 📖 **Documentation:** This README and inline code documentation
+
+---
+
+<div align="center">
+
+**⭐ If this package helped you, please consider giving it a star on GitHub! ⭐**
+
+</div>

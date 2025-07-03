@@ -192,6 +192,22 @@ class FcmService implements FcmServiceInterface
    */
   public function sendToDevice(string $token, FcmMessage $message): array
   {
+    return $this->sendToDeviceWithRetry($token, $message, 0);
+  }
+
+  /**
+   * Send FCM notification to a single device with automatic retry on auth failure
+   * 
+   * @param string $token FCM registration token
+   * @param FcmMessage $message Message to send
+   * @param int $attemptNumber Current attempt number (0-based)
+   * @return array Result with success status and response data
+   */
+  protected function sendToDeviceWithRetry(string $token, FcmMessage $message, int $attemptNumber = 0): array
+  {
+    // Maximum number of retry attempts to prevent infinite loops
+    $maxRetries = config('fcm-notifications.max_auth_retries', 2);
+
     $url = config('fcm-notifications.base_url') . "/{$this->projectId}/messages:send";
 
     $payload = [
@@ -207,6 +223,27 @@ class FcmService implements FcmServiceInterface
         ->post($url, $payload);
 
       if (!$response->successful()) {
+        // Check if it's an authentication error and we haven't exceeded max retries
+        if ($response->status() === 401 && $attemptNumber < $maxRetries) {
+          Log::info('FCM: Access token expired, refreshing and retrying', [
+            'token' => $this->maskToken($token),
+            'title' => $message->getTitle(),
+            'attempt' => $attemptNumber + 1,
+            'max_retries' => $maxRetries,
+          ]);
+
+          // Clear cached token and get a fresh one
+          $this->refreshAccessToken();
+
+          // Add a small delay to prevent rapid-fire retries
+          if ($attemptNumber > 0) {
+            usleep(250000); // 250ms delay for subsequent retries
+          }
+
+          // Retry with incremented attempt number
+          return $this->sendToDeviceWithRetry($token, $message, $attemptNumber + 1);
+        }
+
         $this->handleFcmApiError($response, $token, $message);
       }
 
@@ -214,12 +251,14 @@ class FcmService implements FcmServiceInterface
         'token' => $this->maskToken($token),
         'title' => $message->getTitle(),
         'mode' => $message->getMode(),
+        'attempt_number' => $attemptNumber + 1,
       ]);
 
       return [
         'success' => true,
         'response' => $response->json(),
-        'token' => $token
+        'token' => $token,
+        'attempts' => $attemptNumber + 1
       ];
     } catch (Exception $e) {
       Log::error('FCM: Failed to send message', [
@@ -227,13 +266,17 @@ class FcmService implements FcmServiceInterface
         'token' => $this->maskToken($token),
         'title' => $message->getTitle(),
         'mode' => $message->getMode(),
+        'attempt_number' => $attemptNumber + 1,
+        'max_retries_exceeded' => $attemptNumber >= $maxRetries,
       ]);
 
       return [
         'success' => false,
         'error' => $e->getMessage(),
         'token' => $token,
-        'error_type' => $this->getErrorType($e->getMessage())
+        'error_type' => $this->getErrorType($e->getMessage()),
+        'attempts' => $attemptNumber + 1,
+        'max_retries_exceeded' => $attemptNumber >= $maxRetries
       ];
     }
   }
@@ -400,7 +443,7 @@ class FcmService implements FcmServiceInterface
     $errorMessage = 'FCM API error';
     $errorType = 'unknown';
 
-    // Parse specific FCM error codes
+    // Parse specific FCM error codes and Google API error details
     if (isset($errorData['error']['details'][0]['errorCode'])) {
       $fcmErrorCode = $errorData['error']['details'][0]['errorCode'];
 
@@ -430,6 +473,11 @@ class FcmService implements FcmServiceInterface
           $errorMessage = "FCM API error: {$fcmErrorCode}";
           $errorType = strtolower($fcmErrorCode);
       }
+    } elseif (isset($errorData['error']['details'][0]['reason']) && $errorData['error']['details'][0]['reason'] === 'ACCESS_TOKEN_EXPIRED') {
+      $errorType = 'access_token_expired';
+      $errorMessage = 'FCM access token has expired';
+      // Clear cached token to force refresh on next request
+      Cache::forget(config('fcm-notifications.cache_prefix') . ':access_token');
     } elseif ($statusCode === 401) {
       $errorType = 'unauthorized';
       $errorMessage = 'FCM authentication failed - invalid access token';
@@ -513,5 +561,22 @@ class FcmService implements FcmServiceInterface
     }
 
     return 'unknown';
+  }
+
+  /**
+   * Refresh the cached access token by clearing cache and generating a new one
+   * 
+   * @return void
+   * @throws Exception If token refresh fails
+   */
+  protected function refreshAccessToken(): void
+  {
+    $cacheKey = config('fcm-notifications.cache_prefix') . ':access_token';
+
+    // Clear the cached token
+    Cache::forget($cacheKey);
+
+    // Generate a new access token
+    $this->accessToken = $this->getAccessToken();
   }
 }

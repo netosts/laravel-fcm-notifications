@@ -58,6 +58,19 @@ return [
 
   /*
     |--------------------------------------------------------------------------
+    | Authentication Retry Settings
+    |--------------------------------------------------------------------------
+    |
+    | Configure retry behavior for authentication failures.
+    | max_auth_retries: Maximum number of retry attempts when access token expires
+    | Setting this to 0 disables retries, higher values may increase server load
+    |
+    */
+
+  'max_auth_retries' => env('FCM_MAX_AUTH_RETRIES', 2),
+
+  /*
+    |--------------------------------------------------------------------------
     | Default Message Settings
     |--------------------------------------------------------------------------
     |

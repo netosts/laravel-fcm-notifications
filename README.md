@@ -1,3 +1,5 @@
+![Laravel FCM Notifications Banner](assets/banner_wide.png)
+
 # Laravel FCM Notifications
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/netosts/laravel-fcm-notifications?style=flat-square)](https://packagist.org/packages/netosts/laravel-fcm-notifications)

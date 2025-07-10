@@ -157,7 +157,12 @@ class FcmNotification extends Notification
 
       case 'data_only':
         // For data-only, include title/body as data if provided
-        $dataPayload = array_map(fn($value) => (string) $value, $this->data);
+        $dataPayload = [];
+        // First add the custom data
+        if (!empty($this->data)) {
+          $dataPayload = array_map(fn($value) => (string) $value, $this->data);
+        }
+        // Then add notification fields as data
         if ($this->title) $dataPayload['title'] = $this->title;
         if ($this->body) $dataPayload['body'] = $this->body;
         if ($this->image) $dataPayload['image'] = $this->image;

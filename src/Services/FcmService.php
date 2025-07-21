@@ -475,7 +475,9 @@ class FcmService implements FcmServiceInterface
         case 'UNREGISTERED':
           $errorType = 'unregistered';
           $errorMessage = 'FCM token is unregistered or invalid';
-          $this->handleUnregisteredToken($token);
+          if (config('fcm-notifications.auto_cleanup_tokens', true)) {
+            $this->handleUnregisteredToken($token);
+          }
           break;
 
         case 'INVALID_ARGUMENT':
@@ -538,13 +540,13 @@ class FcmService implements FcmServiceInterface
    */
   protected function handleUnregisteredToken(string $token): void
   {
-    Log::info('FCM: Unregistered token detected', [
+    Log::info('FCM: Unregistered or invalid token detected', [
       'token' => $this->maskToken($token),
       'action' => 'should_remove_from_database'
     ]);
 
     // Fire an event that listeners can use to clean up the token
-    if (class_exists('\Illuminate\Support\Facades\Event') && config('fcm-notifications.cleanup_unregistered_tokens', true)) {
+    if (class_exists('\Illuminate\Support\Facades\Event') && config('fcm-notifications.auto_cleanup_tokens', true)) {
       UnregisteredFcmTokenDetected::dispatch($token);
     }
   }

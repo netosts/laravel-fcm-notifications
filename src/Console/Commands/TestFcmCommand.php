@@ -58,8 +58,9 @@ class TestFcmCommand extends Command
     }
 
     // Validate token format
-    if (!Fcm::validateToken($token)) {
-      $this->error('Invalid FCM token format');
+    $validationResult = Fcm::validateToken($token);
+    if (!$validationResult['valid']) {
+      $this->error('Invalid FCM token: ' . $validationResult['message']);
       return Command::FAILURE;
     }
 

@@ -53,15 +53,23 @@ interface FcmServiceInterface
    * Validate a single FCM token
    * 
    * @param string $token The FCM token to validate
-   * @return bool True if the token is valid, false otherwise
+   * @return array Validation result with status and error details
    */
-  public function validateToken(string $token): bool;
+  public function validateToken(string $token): array;
 
   /**
    * Validate multiple FCM tokens
    * 
    * @param array $tokens Array of FCM tokens to validate
-   * @return array Array containing valid and invalid tokens
+   * @return array Results for each token with validation status
    */
   public function validateTokens(array $tokens): array;
+
+  /**
+   * Simple boolean validation for backward compatibility
+   * 
+   * @param string $token The FCM token to validate
+   * @return bool True if the token is valid, false otherwise
+   */
+  public function isValidToken(string $token): bool;
 }

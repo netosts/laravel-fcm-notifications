@@ -21,7 +21,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static array sendToDevice(string $token, FcmMessage $message)
  * @method static array sendToMultipleDevices(array $tokens, FcmMessage $message)
  * @method static array sendToMultipleDevicesWithCleanup(array $tokens, FcmMessage $message, $model = null)
- * @method static bool validateToken(string $token)
+ * @method static array validateToken(string $token)
+ * @method static bool isValidToken(string $token)
  * @method static array validateTokens(array $tokens)
  * 
  * @see \LaravelFcmNotifications\Services\FcmService

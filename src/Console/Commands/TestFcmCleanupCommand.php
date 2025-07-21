@@ -47,8 +47,11 @@ class TestFcmCleanupCommand extends Command
     try {
       // Test token validation
       $this->info("1. Testing token validation...");
-      $isValid = Fcm::validateToken($testToken);
-      $this->info("Token validation result: " . ($isValid ? 'Valid' : 'Invalid'));
+      $validationResult = Fcm::validateToken($testToken);
+      $this->info("Token validation result: " . ($validationResult['valid'] ? 'Valid' : 'Invalid'));
+      if (!$validationResult['valid']) {
+        $this->comment("Error: " . $validationResult['message']);
+      }
 
       // Test batch validation
       $testTokens = [
@@ -57,10 +60,22 @@ class TestFcmCleanupCommand extends Command
         'invalid_token_short'
       ];
 
-      $validationResult = Fcm::validateTokens($testTokens);
+      $batchResults = Fcm::validateTokens($testTokens);
       $this->info("Batch validation results:");
-      $this->info("Valid tokens: " . count($validationResult['valid']));
-      $this->info("Invalid tokens: " . count($validationResult['invalid']));
+
+      $validCount = 0;
+      $invalidCount = 0;
+
+      foreach ($batchResults as $result) {
+        if ($result['valid']) {
+          $validCount++;
+        } else {
+          $invalidCount++;
+        }
+      }
+
+      $this->info("Valid tokens: " . $validCount);
+      $this->info("Invalid tokens: " . $invalidCount);
 
       // Test unregistered token event dispatch
       $this->info("2. Testing unregistered token event dispatch...");

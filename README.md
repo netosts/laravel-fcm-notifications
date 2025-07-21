@@ -451,26 +451,34 @@ Validate FCM tokens before sending notifications:
 use LaravelFcmNotifications\Facades\Fcm;
 
 // Validate a single token
-$isValid = Fcm::validateToken($deviceToken);
+$validation = Fcm::validateToken($deviceToken);
 
-if ($isValid) {
+if ($validation['valid']) {
     echo "Token is valid and ready to receive notifications";
 } else {
-    echo "Token is invalid or expired";
+    echo "Token is invalid: " . $validation['message'];
+    // Error type: $validation['error_type']
 }
 
 // Validate multiple tokens at once
 $tokens = ['token1', 'token2', 'token3'];
-$result = Fcm::validateTokens($tokens);
+$results = Fcm::validateTokens($tokens);
 
-echo "Valid tokens: " . count($result['valid']) . "\n";
-echo "Invalid tokens: " . count($result['invalid']) . "\n";
+$validCount = 0;
+$invalidCount = 0;
 
-// Remove invalid tokens
-foreach ($result['invalid'] as $invalidToken) {
-    // Remove from your database
-    NotificationToken::where('token', $invalidToken)->delete();
+foreach ($results as $result) {
+    if ($result['valid']) {
+        $validCount++;
+    } else {
+        $invalidCount++;
+        // Remove invalid token from database
+        NotificationToken::where('token', $result['token'])->delete();
+    }
 }
+
+echo "Valid tokens: {$validCount}\n";
+echo "Invalid tokens: {$invalidCount}\n";
 ```
 
 ### Testing in Development
@@ -578,7 +586,8 @@ dd($user->fcm_token);          // For single token
 ```bash
 # Validate your tokens
 php artisan tinker
->>> Fcm::validateToken('your-device-token')
+>>> $result = Fcm::validateToken('your-device-token');
+>>> dd($result); // Shows detailed validation results
 ```
 
 #### ⚡ Performance Issues

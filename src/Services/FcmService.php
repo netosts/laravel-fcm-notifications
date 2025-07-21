@@ -439,6 +439,18 @@ class FcmService implements FcmServiceInterface
   }
 
   /**
+   * Simple boolean validation for backward compatibility
+   * 
+   * @param string $token FCM registration token to validate
+   * @return bool True if the token is valid, false otherwise
+   */
+  public function isValidToken(string $token): bool
+  {
+    $result = $this->validateToken($token);
+    return $result['valid'] ?? false;
+  }
+
+  /**
    * Handle FCM API errors with specific logic for different error types
    * 
    * @param mixed $response HTTP response object

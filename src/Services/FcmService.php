@@ -382,47 +382,60 @@ class FcmService implements FcmServiceInterface
   }
 
   /**
-   * Validate a single FCM token format
+   * Validate an FCM token by sending a test message
    * 
-   * @param string $token FCM registration token
-   * @return bool True if token appears valid
+   * @param string $token FCM registration token to validate
+   * @return array Validation result with status and error details
    */
-  public function validateToken(string $token): bool
+  public function validateToken(string $token): array
   {
-    // FCM tokens are typically 152+ characters with alphanumeric, hyphens, and underscores
-    return strlen($token) >= 140 && preg_match('/^[a-zA-Z0-9_-]+$/', $token);
+    try {
+      // Create a minimal test message
+      $testMessage = new FcmMessage();
+      $testMessage->setData(['test' => 'validation']);
+
+      // Attempt to send the test message
+      $result = $this->sendToDevice($token, $testMessage);
+
+      if ($result['success']) {
+        return [
+          'valid' => true,
+          'token' => $token,
+          'message' => 'Token is valid'
+        ];
+      } else {
+        return [
+          'valid' => false,
+          'token' => $token,
+          'error_type' => $result['error_type'] ?? 'unknown',
+          'message' => $result['error'] ?? 'Token validation failed'
+        ];
+      }
+    } catch (Exception $e) {
+      return [
+        'valid' => false,
+        'token' => $token,
+        'error_type' => 'exception',
+        'message' => $e->getMessage()
+      ];
+    }
   }
 
   /**
-   * Validate multiple FCM tokens
+   * Bulk validate multiple FCM tokens
    * 
    * @param array $tokens Array of FCM registration tokens
-   * @return array Array with 'valid' and 'invalid' token arrays
+   * @return array Results for each token with validation status
    */
   public function validateTokens(array $tokens): array
   {
-    $valid = [];
-    $invalid = [];
+    $results = [];
 
     foreach ($tokens as $token) {
-      if ($this->validateToken($token)) {
-        $valid[] = $token;
-      } else {
-        $invalid[] = $token;
-      }
+      $results[] = $this->validateToken($token);
     }
 
-    if (!empty($invalid)) {
-      Log::warning('FCM: Invalid tokens detected', [
-        'invalid_count' => count($invalid),
-        'valid_count' => count($valid),
-      ]);
-    }
-
-    return [
-      'valid' => $valid,
-      'invalid' => $invalid
-    ];
+    return $results;
   }
 
   /**
@@ -460,7 +473,12 @@ class FcmService implements FcmServiceInterface
 
         case 'SENDER_ID_MISMATCH':
           $errorType = 'sender_mismatch';
-          $errorMessage = 'FCM token sender ID mismatch';
+          $errorMessage = 'FCM token sender ID mismatch - The token was registered with a different Firebase project. ' .
+            'Check your FCM_PROJECT_ID configuration or re-register the device token.';
+          // Also mark token as invalid for cleanup if auto-cleanup is enabled
+          if (config('fcm-notifications.auto_cleanup_tokens', true)) {
+            $this->handleUnregisteredToken($token);
+          }
           break;
 
         case 'QUOTA_EXCEEDED':

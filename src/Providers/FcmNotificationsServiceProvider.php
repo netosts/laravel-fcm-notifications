@@ -18,6 +18,7 @@ use LaravelFcmNotifications\Services\FcmChannel;
 use LaravelFcmNotifications\Services\FcmService;
 use LaravelFcmNotifications\Console\Commands\TestFcmCommand;
 use LaravelFcmNotifications\Console\Commands\TestFcmCleanupCommand;
+use LaravelFcmNotifications\Console\Commands\ValidateFcmTokensCommand;
 use Illuminate\Notifications\ChannelManager;
 use Illuminate\Support\ServiceProvider;
 
@@ -74,6 +75,7 @@ class FcmNotificationsServiceProvider extends ServiceProvider
       $this->commands([
         TestFcmCommand::class,
         TestFcmCleanupCommand::class,
+        ValidateFcmTokensCommand::class,
       ]);
 
       // Publish configuration

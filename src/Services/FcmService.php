@@ -32,10 +32,10 @@ use Illuminate\Support\Facades\Log;
  */
 class FcmService implements FcmServiceInterface
 {
-  protected string $projectId;
-  protected string $clientEmail;
-  protected string $privateKey;
-  protected string $accessToken;
+  protected ?string $projectId = null;
+  protected ?string $clientEmail = null;
+  protected ?string $privateKey = null;
+  protected ?string $accessToken = null;
 
   /**
    * Initialize FCM service with configuration validation

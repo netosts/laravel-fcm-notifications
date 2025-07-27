@@ -36,20 +36,45 @@ class FcmService implements FcmServiceInterface
   protected ?string $clientEmail = null;
   protected ?string $privateKey = null;
   protected ?string $accessToken = null;
+  protected bool $initialized = false;
 
   /**
-   * Initialize FCM service with configuration validation
-   * 
-   * @throws Exception If FCM configuration is incomplete
+   * Initialize FCM service (constructor kept minimal for Laravel service container)
    */
   public function __construct()
   {
-    $this->projectId = config('fcm-notifications.project_id');
-    $this->clientEmail = config('fcm-notifications.client_email');
-    $this->privateKey = config('fcm-notifications.private_key');
+    // Defer initialization until actually needed to avoid issues during package discovery
+  }
+
+  /**
+   * Initialize FCM service configuration
+   * This method is called lazily when the service is first used
+   * 
+   * @throws Exception If FCM configuration is incomplete
+   */
+  protected function initializeIfNeeded(): void
+  {
+    if ($this->initialized) {
+      return;
+    }
+
+    // Skip initialization if config values are not available (e.g., during package discovery)
+    $projectId = config('fcm-notifications.project_id');
+    $clientEmail = config('fcm-notifications.client_email');
+    $privateKey = config('fcm-notifications.private_key');
+
+    if (empty($projectId) || empty($clientEmail) || empty($privateKey)) {
+      // Don't throw during package discovery - just return and let it initialize later
+      return;
+    }
+
+    $this->projectId = $projectId;
+    $this->clientEmail = $clientEmail;
+    $this->privateKey = $privateKey;
 
     $this->validateConfiguration();
     $this->accessToken = $this->getAccessToken();
+    $this->initialized = true;
   }
 
   /**
@@ -191,6 +216,7 @@ class FcmService implements FcmServiceInterface
    */
   public function sendToDevice(string $token, FcmMessage $message): array
   {
+    $this->initializeIfNeeded();
     return $this->sendToDeviceWithRetry($token, $message, 0);
   }
 
@@ -204,6 +230,15 @@ class FcmService implements FcmServiceInterface
    */
   protected function sendToDeviceWithRetry(string $token, FcmMessage $message, int $attemptNumber = 0): array
   {
+    // Check if service is properly initialized
+    if (!$this->initialized || empty($this->projectId) || empty($this->accessToken)) {
+      return [
+        'success' => false,
+        'error' => 'FCM service not properly initialized. Please check your configuration.',
+        'error_type' => 'configuration'
+      ];
+    }
+
     // Maximum number of retry attempts to prevent infinite loops
     $maxRetries = config('fcm-notifications.max_auth_retries', 2);
 
@@ -289,6 +324,7 @@ class FcmService implements FcmServiceInterface
    */
   public function sendToMultipleDevices(array $tokens, FcmMessage $message): array
   {
+    $this->initializeIfNeeded();
     $results = [];
     $successCount = 0;
     $failureCount = 0;
@@ -341,6 +377,7 @@ class FcmService implements FcmServiceInterface
    */
   public function sendToMultipleDevicesWithCleanup(array $tokens, FcmMessage $message, $model = null): array
   {
+    $this->initializeIfNeeded();
     $result = $this->sendToMultipleDevices($tokens, $message);
 
     // If we have a model and unregistered tokens, clean them up
@@ -389,6 +426,7 @@ class FcmService implements FcmServiceInterface
    */
   public function validateToken(string $token): array
   {
+    $this->initializeIfNeeded();
     try {
       // Create a minimal test message
       $testMessage = new FcmMessage();
@@ -429,6 +467,7 @@ class FcmService implements FcmServiceInterface
    */
   public function validateTokens(array $tokens): array
   {
+    $this->initializeIfNeeded();
     $results = [];
 
     foreach ($tokens as $token) {
@@ -446,6 +485,7 @@ class FcmService implements FcmServiceInterface
    */
   public function isValidToken(string $token): bool
   {
+    $this->initializeIfNeeded();
     $result = $this->validateToken($token);
     return $result['valid'] ?? false;
   }

@@ -208,16 +208,27 @@ class FcmService implements FcmServiceInterface
   }
 
   /**
-   * Send FCM notification to a single device
+   * Send FCM notification to a single device with automatic token cleanup
    * 
    * @param string $token FCM registration token
    * @param FcmMessage $message Message to send
+   * @param mixed $model Model instance for token cleanup (optional)
    * @return array Result with success status and response data
    */
-  public function sendToDevice(string $token, FcmMessage $message): array
+  public function sendToDevice(string $token, FcmMessage $message, $model = null): array
   {
     $this->initializeIfNeeded();
-    return $this->sendToDeviceWithRetry($token, $message, 0);
+    $result = $this->sendToDeviceWithRetry($token, $message, 0);
+
+    // If we have a model and the token is unregistered, clean it up
+    if (
+      $model && !$result['success'] &&
+      isset($result['error_type']) && $result['error_type'] === 'unregistered'
+    ) {
+      $this->cleanupUnregisteredTokens([$token], $model);
+    }
+
+    return $result;
   }
 
   /**

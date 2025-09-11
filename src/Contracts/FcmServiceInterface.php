@@ -22,13 +22,14 @@ use LaravelFcmNotifications\Services\FcmMessage;
 interface FcmServiceInterface
 {
   /**
-   * Send a message to a single device
+   * Send a message to a single device with automatic token cleanup
    * 
    * @param string $token The FCM token for the target device
    * @param FcmMessage $message The message to send
+   * @param mixed|null $model Optional model for token cleanup context
    * @return array Response from the FCM service
    */
-  public function sendToDevice(string $token, FcmMessage $message): array;
+  public function sendToDevice(string $token, FcmMessage $message, $model = null): array;
 
   /**
    * Send a message to multiple devices

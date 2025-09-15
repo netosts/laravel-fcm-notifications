@@ -349,8 +349,11 @@ class FcmService implements FcmServiceInterface
       } else {
         $failureCount++;
 
-        // Track unregistered tokens for cleanup
-        if (isset($result['error_type']) && $result['error_type'] === 'unregistered') {
+        // Track unregistered AND invalid tokens for cleanup
+        if (
+          isset($result['error_type']) &&
+          in_array($result['error_type'], ['unregistered', 'invalid_token', 'sender_mismatch'])
+        ) {
           $unregisteredTokens[] = $token;
         }
       }
@@ -532,8 +535,35 @@ class FcmService implements FcmServiceInterface
           break;
 
         case 'INVALID_ARGUMENT':
-          $errorType = 'invalid_argument';
-          $errorMessage = 'Invalid FCM message format or parameters';
+          // Check if it's specifically an invalid token
+          $isInvalidToken = false;
+          if (isset($errorData['error']['details'])) {
+            foreach ($errorData['error']['details'] as $detail) {
+              if (isset($detail['fieldViolations'])) {
+                foreach ($detail['fieldViolations'] as $violation) {
+                  if (
+                    $violation['field'] === 'message.token' &&
+                    strpos(strtolower($violation['description']), 'invalid registration token') !== false
+                  ) {
+                    $isInvalidToken = true;
+                    break 2;
+                  }
+                }
+              }
+            }
+          }
+
+          if ($isInvalidToken) {
+            $errorType = 'invalid_token';
+            $errorMessage = 'FCM token format is invalid';
+            // Treat invalid tokens the same as unregistered tokens for cleanup
+            if (config('fcm-notifications.auto_cleanup_tokens', true)) {
+              $this->handleUnregisteredToken($token);
+            }
+          } else {
+            $errorType = 'invalid_argument';
+            $errorMessage = 'Invalid FCM message format or parameters';
+          }
           break;
 
         case 'SENDER_ID_MISMATCH':
@@ -630,6 +660,8 @@ class FcmService implements FcmServiceInterface
 
     if (strpos($message, 'unregistered') !== false) {
       return 'unregistered';
+    } elseif (strpos($message, 'invalid registration token') !== false) {
+      return 'invalid_token';
     } elseif (strpos($message, 'invalid') !== false) {
       return 'invalid_argument';
     } elseif (strpos($message, 'unauthorized') !== false || strpos($message, 'authentication') !== false) {

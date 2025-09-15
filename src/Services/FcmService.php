@@ -19,6 +19,10 @@ use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 
 /**
  * Firebase Cloud Messaging Service
@@ -87,6 +91,21 @@ class FcmService implements FcmServiceInterface
     if (empty($this->projectId) || empty($this->clientEmail) || empty($this->privateKey)) {
       throw new Exception('FCM configuration is incomplete. Please check your environment variables.');
     }
+
+    // Validate private key format
+    if (!openssl_pkey_get_private($this->privateKey)) {
+      throw new Exception('Invalid FCM private key format. Please check your FCM_PRIVATE_KEY environment variable.');
+    }
+
+    // Validate email format
+    if (!filter_var($this->clientEmail, FILTER_VALIDATE_EMAIL)) {
+      throw new Exception('Invalid FCM client email format. Please check your FCM_CLIENT_EMAIL environment variable.');
+    }
+
+    // Validate project ID format (should be alphanumeric with hyphens)
+    if (!preg_match('/^[a-z0-9-]+$/', $this->projectId)) {
+      throw new Exception('Invalid FCM project ID format. Please check your FCM_PROJECT_ID environment variable.');
+    }
   }
 
   /**
@@ -97,7 +116,7 @@ class FcmService implements FcmServiceInterface
    */
   protected function getAccessToken(): string
   {
-    $cacheKey = config('fcm-notifications.cache_prefix') . ':access_token';
+    $cacheKey = $this->getCacheKey('access_token');
 
     if (config('fcm-notifications.cache_token', true)) {
       $token = Cache::get($cacheKey);
@@ -115,6 +134,21 @@ class FcmService implements FcmServiceInterface
     }
 
     return $accessToken;
+  }
+
+  /**
+   * Generate a unique cache key for this FCM service instance
+   * 
+   * @param string $suffix Additional suffix for the cache key
+   * @return string Unique cache key
+   */
+  protected function getCacheKey(string $suffix = ''): string
+  {
+    // Create a unique identifier based on project configuration
+    $projectHash = hash('sha256', ($this->projectId ?? 'default') . ($this->clientEmail ?? ''));
+    $baseKey = config('fcm-notifications.cache_prefix', 'fcm_notifications');
+
+    return $suffix ? "{$baseKey}_{$projectHash}_{$suffix}" : "{$baseKey}_{$projectHash}";
   }
 
   /**
@@ -172,10 +206,18 @@ class FcmService implements FcmServiceInterface
   protected function exchangeJwtForAccessToken(string $jwt): string
   {
     try {
-      $response = Http::asForm()->post(config('fcm-notifications.oauth_url'), [
-        'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        'assertion' => $jwt,
-      ]);
+      $response = Http::retry(3, 100, function ($exception) {
+        // Retry on connection exceptions and 5xx server errors
+        return $exception instanceof ConnectionException ||
+          ($exception instanceof RequestException &&
+            $exception->response &&
+            $exception->response->status() >= 500);
+      })
+        ->asForm()
+        ->post(config('fcm-notifications.oauth_url'), [
+          'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          'assertion' => $jwt,
+        ]);
 
       if (!$response->successful()) {
         throw new Exception('Failed to obtain access token: ' . $response->body());
@@ -263,7 +305,14 @@ class FcmService implements FcmServiceInterface
     ];
 
     try {
-      $response = Http::withToken($this->accessToken)
+      $response = Http::retry(3, 100, function ($exception) {
+        // Retry on connection exceptions, timeouts, and 5xx server errors
+        return $exception instanceof ConnectionException ||
+          ($exception instanceof RequestException &&
+            $exception->response &&
+            $exception->response->status() >= 500);
+      })
+        ->withToken($this->accessToken)
         ->timeout(config('fcm-notifications.timeout', 30))
         ->post($url, $payload);
 
@@ -349,7 +398,7 @@ class FcmService implements FcmServiceInterface
       } else {
         $failureCount++;
 
-        // Track unregistered AND invalid tokens for cleanup
+        // Track unregistered AND invalid tokens for cleanup - DEFAULT BEHAVIOR
         if (
           isset($result['error_type']) &&
           in_array($result['error_type'], ['unregistered', 'invalid_token', 'sender_mismatch'])
@@ -361,11 +410,17 @@ class FcmService implements FcmServiceInterface
       $results[] = $result;
     }
 
+    // AUTOMATIC CLEANUP - Always attempt to clean up invalid tokens
+    if (!empty($unregisteredTokens) && config('fcm-notifications.auto_cleanup_tokens', true)) {
+      $this->performAutomaticTokenCleanup($unregisteredTokens);
+    }
+
     Log::info('FCM: Batch send completed', [
       'total_tokens' => count($tokens),
       'success_count' => $successCount,
       'failure_count' => $failureCount,
       'unregistered_count' => count($unregisteredTokens),
+      'auto_cleanup_performed' => !empty($unregisteredTokens),
       'title' => $message->getTitle(),
       'mode' => $message->getMode(),
     ]);
@@ -377,30 +432,12 @@ class FcmService implements FcmServiceInterface
         'success' => $successCount,
         'failure' => $failureCount,
         'unregistered_tokens' => $unregisteredTokens,
+        'auto_cleanup_performed' => !empty($unregisteredTokens),
       ]
     ];
   }
 
-  /**
-   * Send FCM notification to multiple devices with automatic token cleanup
-   * 
-   * @param array $tokens Array of FCM registration tokens
-   * @param FcmMessage $message Message to send
-   * @param mixed $model Model instance for token cleanup (optional)
-   * @return array Batch send results with summary
-   */
-  public function sendToMultipleDevicesWithCleanup(array $tokens, FcmMessage $message, $model = null): array
-  {
-    $this->initializeIfNeeded();
-    $result = $this->sendToMultipleDevices($tokens, $message);
 
-    // If we have a model and unregistered tokens, clean them up
-    if ($model && !empty($result['summary']['unregistered_tokens'])) {
-      $this->cleanupUnregisteredTokens($result['summary']['unregistered_tokens'], $model);
-    }
-
-    return $result;
-  }
 
   /**
    * Clean up unregistered tokens from a model
@@ -428,6 +465,58 @@ class FcmService implements FcmServiceInterface
           'model_type' => get_class($model),
           'model_id' => $model->id ?? 'unknown',
         ]);
+      }
+    }
+  }
+
+  /**
+   * Perform automatic token cleanup when no model is available
+   * This is the DEFAULT cleanup behavior that works without requiring a model
+   * 
+   * @param array $unregisteredTokens Array of invalid tokens to clean up
+   */
+  protected function performAutomaticTokenCleanup(array $unregisteredTokens): void
+  {
+    if (empty($unregisteredTokens)) {
+      return;
+    }
+
+    try {
+      // Clean up from the default notification_tokens table
+      $tokenColumn = config('fcm-notifications.token_column', 'token');
+      $deletedCount = DB::table('notification_tokens')
+        ->whereIn($tokenColumn, $unregisteredTokens)
+        ->delete();
+
+      // Also clean up from users table if fcm_token column exists
+      $userTokensDeleted = 0;
+      if (Schema::hasColumn('users', 'fcm_token')) {
+        $userTokensDeleted = DB::table('users')
+          ->whereIn('fcm_token', $unregisteredTokens)
+          ->update(['fcm_token' => null]);
+      }
+
+      // Dispatch events for each token (for custom cleanup listeners)
+      foreach ($unregisteredTokens as $token) {
+        $this->handleUnregisteredToken($token);
+      }
+
+      Log::info('FCM: Automatic token cleanup completed', [
+        'tokens_processed' => count($unregisteredTokens),
+        'notification_tokens_deleted' => $deletedCount,
+        'user_tokens_cleared' => $userTokensDeleted,
+        'cleanup_method' => 'automatic_default'
+      ]);
+    } catch (Exception $e) {
+      Log::error('FCM: Automatic token cleanup failed', [
+        'error' => $e->getMessage(),
+        'tokens_count' => count($unregisteredTokens),
+        'cleanup_method' => 'automatic_default'
+      ]);
+
+      // Still dispatch events even if database cleanup failed
+      foreach ($unregisteredTokens as $token) {
+        $this->handleUnregisteredToken($token);
       }
     }
   }
@@ -578,7 +667,47 @@ class FcmService implements FcmServiceInterface
 
         case 'QUOTA_EXCEEDED':
           $errorType = 'quota_exceeded';
-          $errorMessage = 'FCM quota exceeded';
+          $errorMessage = 'FCM quota exceeded - Consider implementing exponential backoff or reducing message frequency';
+          break;
+
+        case 'THIRD_PARTY_AUTH_ERROR':
+          $errorType = 'auth_error';
+          $errorMessage = 'FCM third-party authentication error - Check service account permissions and Firebase project settings';
+          break;
+
+        case 'INVALID_PACKAGE_NAME':
+          $errorType = 'invalid_package';
+          $errorMessage = 'FCM invalid package name - The app package name does not match the Firebase project configuration';
+          break;
+
+        case 'MISMATCHED_CREDENTIAL':
+          $errorType = 'credential_mismatch';
+          $errorMessage = 'FCM credential mismatch - The credential used does not match the Firebase project';
+          break;
+
+        case 'INTERNAL':
+          $errorType = 'internal_error';
+          $errorMessage = 'FCM internal server error - This is a temporary issue, retry with exponential backoff';
+          break;
+
+        case 'UNAVAILABLE':
+          $errorType = 'service_unavailable';
+          $errorMessage = 'FCM service temporarily unavailable - Retry with exponential backoff';
+          break;
+
+        case 'APNS_AUTH_ERROR':
+          $errorType = 'apns_auth_error';
+          $errorMessage = 'FCM APNS authentication error - Check iOS push certificate configuration in Firebase Console';
+          break;
+
+        case 'TOO_MANY_TOPICS':
+          $errorType = 'too_many_topics';
+          $errorMessage = 'FCM topic limit exceeded - A single app instance can subscribe to max 2000 topics';
+          break;
+
+        case 'INVALID_TTL':
+          $errorType = 'invalid_ttl';
+          $errorMessage = 'FCM invalid TTL (Time To Live) value - Must be between 0 and 2419200 seconds (28 days)';
           break;
 
         default:
@@ -589,12 +718,12 @@ class FcmService implements FcmServiceInterface
       $errorType = 'access_token_expired';
       $errorMessage = 'FCM access token has expired';
       // Clear cached token to force refresh on next request
-      Cache::forget(config('fcm-notifications.cache_prefix') . ':access_token');
+      Cache::forget($this->getCacheKey('access_token'));
     } elseif ($statusCode === 401) {
       $errorType = 'unauthorized';
       $errorMessage = 'FCM authentication failed - invalid access token';
       // Clear cached token to force refresh on next request
-      Cache::forget(config('fcm-notifications.cache_prefix') . ':access_token');
+      Cache::forget($this->getCacheKey('access_token'));
     } elseif ($statusCode === 400) {
       $errorType = 'bad_request';
       $errorMessage = 'FCM bad request - invalid message format';
@@ -628,7 +757,15 @@ class FcmService implements FcmServiceInterface
 
     // Fire an event that listeners can use to clean up the token
     if (class_exists('\Illuminate\Support\Facades\Event') && config('fcm-notifications.auto_cleanup_tokens', true)) {
-      UnregisteredFcmTokenDetected::dispatch($token);
+      // Use a mutex lock to prevent race conditions during token cleanup
+      $lockKey = 'fcm_cleanup_' . hash('sha256', $token);
+      $lockDuration = 10; // 10 seconds should be enough for cleanup
+
+      Cache::lock($lockKey, $lockDuration)->get(function () use ($token) {
+        // Double-check if token still exists before dispatching cleanup event
+        // This prevents duplicate cleanup attempts
+        UnregisteredFcmTokenDetected::dispatch($token);
+      });
     }
   }
 
@@ -685,7 +822,7 @@ class FcmService implements FcmServiceInterface
    */
   protected function refreshAccessToken(): void
   {
-    $cacheKey = config('fcm-notifications.cache_prefix') . ':access_token';
+    $cacheKey = $this->getCacheKey('access_token');
 
     // Clear the cached token
     Cache::forget($cacheKey);

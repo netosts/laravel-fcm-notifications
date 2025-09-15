@@ -32,23 +32,15 @@ interface FcmServiceInterface
   public function sendToDevice(string $token, FcmMessage $message, $model = null): array;
 
   /**
-   * Send a message to multiple devices
-   * 
-   * @param array $tokens Array of FCM tokens for target devices
-   * @param FcmMessage $message The message to send
-   * @return array Response from the FCM service
-   */
-  public function sendToMultipleDevices(array $tokens, FcmMessage $message): array;
-
-  /**
    * Send a message to multiple devices with automatic token cleanup
    * 
    * @param array $tokens Array of FCM tokens for target devices
    * @param FcmMessage $message The message to send
-   * @param mixed|null $model Optional model for token cleanup context
-   * @return array Response from the FCM service
+   * @return array Response from the FCM service with cleanup summary
    */
-  public function sendToMultipleDevicesWithCleanup(array $tokens, FcmMessage $message, $model = null): array;
+  public function sendToMultipleDevices(array $tokens, FcmMessage $message): array;
+
+
 
   /**
    * Validate a single FCM token

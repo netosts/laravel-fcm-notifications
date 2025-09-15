@@ -83,7 +83,7 @@ class FcmChannel implements FcmChannelInterface
         $result = $this->fcmService->sendToDevice($tokens[0], $message);
         $this->handleSendResult($result, $notifiable);
       } elseif (is_array($tokens) && count($tokens) > 1) {
-        $result = $this->fcmService->sendToMultipleDevicesWithCleanup($tokens, $message, $notifiable);
+        $result = $this->fcmService->sendToMultipleDevices($tokens, $message);
         $this->handleBatchSendResult($result, $notifiable);
       }
     }
@@ -112,7 +112,7 @@ class FcmChannel implements FcmChannelInterface
   protected function handleBatchSendResult(array $result, $notifiable): void
   {
     // Additional batch result handling can be added here if needed
-    // Token cleanup is already handled in sendToMultipleDevicesWithCleanup
+    // Token cleanup is already handled automatically in sendToMultipleDevices
   }
 
   /**

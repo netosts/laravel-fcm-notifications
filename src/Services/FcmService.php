@@ -482,42 +482,21 @@ class FcmService implements FcmServiceInterface
     }
 
     try {
-      // Clean up from the default notification_tokens table
-      $tokenColumn = config('fcm-notifications.token_column', 'token');
-      $deletedCount = DB::table('notification_tokens')
-        ->whereIn($tokenColumn, $unregisteredTokens)
-        ->delete();
-
-      // Also clean up from users table if fcm_token column exists
-      $userTokensDeleted = 0;
-      if (Schema::hasColumn('users', 'fcm_token')) {
-        $userTokensDeleted = DB::table('users')
-          ->whereIn('fcm_token', $unregisteredTokens)
-          ->update(['fcm_token' => null]);
-      }
-
-      // Dispatch events for each token (for custom cleanup listeners)
+      // Dispatch events for each token - let the event listeners handle database cleanup
       foreach ($unregisteredTokens as $token) {
         $this->handleUnregisteredToken($token);
       }
 
-      Log::info('FCM: Automatic token cleanup completed', [
+      Log::info('FCM: Automatic token cleanup events dispatched', [
         'tokens_processed' => count($unregisteredTokens),
-        'notification_tokens_deleted' => $deletedCount,
-        'user_tokens_cleared' => $userTokensDeleted,
-        'cleanup_method' => 'automatic_default'
+        'cleanup_method' => 'event_driven'
       ]);
     } catch (Exception $e) {
-      Log::error('FCM: Automatic token cleanup failed', [
+      Log::error('FCM: Failed to dispatch automatic token cleanup events', [
         'error' => $e->getMessage(),
         'tokens_count' => count($unregisteredTokens),
-        'cleanup_method' => 'automatic_default'
+        'cleanup_method' => 'event_driven'
       ]);
-
-      // Still dispatch events even if database cleanup failed
-      foreach ($unregisteredTokens as $token) {
-        $this->handleUnregisteredToken($token);
-      }
     }
   }
 
@@ -724,6 +703,13 @@ class FcmService implements FcmServiceInterface
       $errorMessage = 'FCM authentication failed - invalid access token';
       // Clear cached token to force refresh on next request
       Cache::forget($this->getCacheKey('access_token'));
+    } elseif ($statusCode === 404) {
+      $errorType = 'unregistered';
+      $errorMessage = 'FCM token not found - the registration token is no longer valid';
+      // Treat 404 as unregistered token for cleanup
+      if (config('fcm-notifications.auto_cleanup_tokens', true)) {
+        $this->handleUnregisteredToken($token);
+      }
     } elseif ($statusCode === 400) {
       $errorType = 'bad_request';
       $errorMessage = 'FCM bad request - invalid message format';
@@ -796,6 +782,8 @@ class FcmService implements FcmServiceInterface
     $message = strtolower($errorMessage);
 
     if (strpos($message, 'unregistered') !== false) {
+      return 'unregistered';
+    } elseif (strpos($message, 'not found') !== false || strpos($message, '404') !== false) {
       return 'unregistered';
     } elseif (strpos($message, 'invalid registration token') !== false) {
       return 'invalid_token';
